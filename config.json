@@ -24,13 +24,6 @@
     "https://vietnamnet.vn",
     "https://baochinhphu.vn"
   ],
-  "USED": 437,
-  "sources[]": "https://baochinhphu.vn",
-  "videoSources": [
-    "https://www.youtube.com/@TheDodo"
-  ],
-  "DEBUG_MODE_REELS": false,
-  "VIDEO_POST_INTERVAL_MINUTES": 1,
-  "VIDEO_CRAWL_LOOP_DELAY_MINUTES": 1,
-  "videoSources[]": "https://www.youtube.com/@TheDodo"
+  "USED": 441,
+  "sources[]": "https://baochinhphu.vn"
 }

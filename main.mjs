@@ -9,15 +9,11 @@ import { loadConfig, saveConfig } from './src/configLoader.js';
 import axios from 'axios';
 import fs from 'fs';
 
-app.commandLine.appendSwitch('ignore-certificate-errors');
-app.commandLine.appendSwitch('disable-web-security');
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 let mainWindow = null;
 let crawlerProcess = null;
-let reelsProcess = null;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -29,14 +25,7 @@ function createWindow() {
             nodeIntegration: false
         },
     });
-    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-            if (message.includes('Autofill.enable') || message.includes('Autofill.setAddresses')) {
-                // Ngăn không cho thông báo này hiển thị trên console
-                return;
-            }
-            // Cho phép các thông báo khác hiển thị
-            console.log(`[Renderer Console] ${message}`);
-        });
+
     mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -51,11 +40,7 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         if (crawlerProcess) {
             crawlerProcess.kill('SIGTERM');
-            console.log('News crawler process stopped due to app close.');
-        }
-        if (reelsProcess) {
-            reelsProcess.kill('SIGTERM');
-            console.log('Reels crawler process stopped due to app close.');
+            console.log('Crawler process stopped due to app close.');
         }
         app.quit();
     }
@@ -100,6 +85,7 @@ ipcMain.on('start-auto-post', (event, configUpdate) => {
                     }
                 }
             } else if (msg.type === 'post-success') { 
+                // CHỖ NÀY ĐÃ ĐƯỢC SỬA: Chuyển tiếp thông điệp đăng bài thành công
                 mainWindow.webContents.send('post-success-updated', msg.content);
             }
         });
@@ -142,72 +128,6 @@ ipcMain.on('stop-auto-post', () => {
     }
 });
 
-ipcMain.on('start-reels-post', (event, configUpdate) => {
-    console.log('Nhận lệnh START REELS POST');
-    const currentConfig = loadConfig();
-    Object.assign(currentConfig, configUpdate);
-    saveConfig(currentConfig);
-
-    if (!reelsProcess || reelsProcess.killed) {
-        reelsProcess = fork(path.join(__dirname, 'src', 'reels.js'), [], {
-            stdio: ['inherit', 'inherit', 'inherit', 'ipc']
-        });
-
-        reelsProcess.on('message', (msg) => {
-            if (msg.type === 'log') {
-                mainWindow.webContents.send('show-notification', { type: 'info', message: msg.message });
-            } else if (msg.type === 'new-video-content') {
-                mainWindow.webContents.send('new-video-content-updated', msg.content);
-            } else if (msg.type === 'reels-status') {
-                mainWindow.webContents.send('reels-status', msg.message);
-                if (msg.message === 'stopped') {
-                    if (reelsProcess) {
-                        reelsProcess.kill('SIGTERM');
-                        reelsProcess = null;
-                    }
-                }
-            } else if (msg.type === 'reels-post-success') {
-                mainWindow.webContents.send('reels-post-success-updated', msg.content);
-            }
-        });
-
-        reelsProcess.on('exit', (code, signal) => {
-            console.log(`Reels crawler process exited with code ${code} and signal ${signal}`);
-            mainWindow.webContents.send('show-notification', { type: 'stopped', message: `Tiến trình Video đã dừng (Code: ${code}, Signal: ${signal})` });
-            reelsProcess = null;
-        });
-
-        reelsProcess.send({ command: 'start-reels', config: configUpdate });
-        mainWindow.webContents.send('show-notification', { type: 'info', message: '🚀 Đang khởi động luồng video...' });
-        mainWindow.webContents.send('reels-status', 'running');
-    } else {
-        console.log('Reels crawler process already running.');
-        mainWindow.webContents.send('show-notification', { type: 'info', message: '❗ Luồng Video đã chạy rồi.' });
-    }
-});
-
-ipcMain.on('stop-reels-post', () => {
-    console.log('Nhận lệnh STOP REELS POST');
-    if (reelsProcess) {
-        reelsProcess.send({ command: 'stop-reels' });
-        mainWindow.webContents.send('show-notification', { type: 'info', message: '🛑 Đang gửi yêu cầu dừng luồng Video...' });
-        mainWindow.webContents.send('reels-status', 'stopping');
-        
-        setTimeout(() => {
-            if (reelsProcess && !reelsProcess.killed) {
-                console.warn('⚠️ Tiến trình Video không tự dừng, buộc phải kill.');
-                reelsProcess.kill('SIGKILL');
-                reelsProcess = null;
-                mainWindow.webContents.send('show-notification', { type: 'stopped', message: '🛑 Buộc dừng luồng Video.' });
-                mainWindow.webContents.send('reels-status', 'stopped');
-            }
-        }, 10000);
-    } else {
-        console.log('No reels process to stop.');
-        mainWindow.webContents.send('show-notification', { type: 'info', message: '❗ Không có luồng Video nào để dừng.' });
-    }
-});
-
 ipcMain.on('save-image', async (event, imageSrc) => {
     if (!mainWindow) return;
 
@@ -227,7 +147,7 @@ ipcMain.on('save-image', async (event, imageSrc) => {
         }
     } catch (error) {
         console.error('Lỗi tải dữ liệu ảnh:', error);
-        mainWindow.webContents.send('show-notification', { type: 'error', message: 'Không thể tải dữ liệu ảnh để lưu.' });
+        notifyRenderer('error', 'Không thể tải dữ liệu ảnh để lưu.');
         return;
     }
 
@@ -245,10 +165,10 @@ ipcMain.on('save-image', async (event, imageSrc) => {
     if (filePath) {
         try {
             fs.writeFileSync(filePath, imageBuffer);
-            mainWindow.webContents.send('show-notification', { type: 'success', message: `✅ Đã lưu ảnh thành công tại: ${filePath}` });
+            notifyRenderer('success', `✅ Đã lưu ảnh thành công tại: ${filePath}`);
         } catch (error) {
             console.error('Lỗi khi lưu file ảnh:', error);
-            mainWindow.webContents.send('show-notification', { type: 'error', message: `Lỗi khi lưu ảnh: ${error.message}` });
+            notifyRenderer('error', `Lỗi khi lưu ảnh: ${error.message}`);
         }
     }
 });

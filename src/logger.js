@@ -1,7 +1,6 @@
 // src/logger.js
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import stringSimilarity from 'string-similarity';
 
 const DATA_DIR = path.resolve('./data');
