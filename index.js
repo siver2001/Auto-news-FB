@@ -1,17 +1,17 @@
-// index.js
+// index.js (Phiên bản đã sửa lỗi và tái cấu trúc cho môi trường web)
 process.stdout.write('\x1b[0m'); // reset
 process.stdout.setDefaultEncoding('utf8');
 import crypto from 'crypto';
 import axios from 'axios';
 import { loadConfig, saveConfig } from './src/configLoader.js';
-import { crawlSources, fetchArticleContent, fetchArticleImages  } from './src/crawler.js';
-import { rewriteContent, RateLimitError  } from './src/rewrite.js'; // Import RateLimitError
+import { crawlSources, fetchArticleContent, fetchArticleImages } from './src/crawler.js';
+import { rewriteContent, RateLimitError } from './src/rewrite.js';
 import { rewriteManual } from './src/rewrite_manual.js';
 import { classifyTopic } from './src/topicModeler.js';
 import { extractKeywords } from './src/keywords.js';
-import { overlayLogo } from './src/quoteOverlay.js'; 
+import { overlayLogo } from './src/quoteOverlay.js';
 import { analyzeTrendingTopics } from './src/trendAnalyzer.js';
-import { postToFacebook, reactToFacebook, postStoryWithLink  } from './src/poster.js';
+import { postToFacebook, reactToFacebook, postStoryWithLink } from './src/poster.js';
 import {
   loadLogEntries,
   isLinkPosted,
@@ -19,8 +19,7 @@ import {
   isImageHashPosted,
   saveLogEntry,
 } from './src/logger.js';
-import { postProcessText } from './src/textProcessor.js'; // Import postProcessText
-
+import { postProcessText } from './src/textProcessor.js';
 
 const HASH_ALGO = 'md5';
 
@@ -38,239 +37,77 @@ function incrementUsed(config) {
 }
 
 // Biến để kiểm soát vòng lặp chạy/dừng
-let isCrawlingRunning = false;
-let postQueue = []; // Hàng chờ chứa các bài viết đã xử lý sẵn sàng để đăng
-let postIntervalId = null; // ID của setInterval để xử lý hàng chờ đăng bài
-let lastPostTimestamp = 0; // Timestamp của lần đăng bài thành công gần nhất
+export let isCrawlingRunning = false;
+let postQueue = [];
+let postIntervalId = null;
+let lastPostTimestamp = 0;
+let logCallback = console.log;
 
-// Hàm gửi log về tiến trình chính (main.mjs)
 function sendLog(message, type = 'info', content = null) {
-  if (process.send) {
-    process.send({ type: 'log', message: message, contentType: type, content: content });
-  } else {
-    console.log(message);
-  }
+  logCallback(message, type, content);
 }
 
-// Hàm chính của luồng cào bài liên tục
-async function startCrawlingLoop() {
-  if (!isCrawlingRunning) {
-    sendLog('🛑 Luồng cào bài đã nhận lệnh dừng và thoát.');
-    process.send({ type: 'status', message: 'stopped' });
-    process.exit(0);
-  }
-  
-  sendLog(`\n🔄 Bắt đầu chu kỳ cào bài mới [${new Date().toLocaleString()}]`);
-
-  const config = loadConfig();
-  const { REWRITE_MODE, DEBUG_MODE, sources, LOGO_PATH, CRAWL_LOOP_DELAY_MINUTES } = config; // Lấy CRAWL_LOOP_DELAY_MINUTES
-  sendLog(`⚙️  Chế độ: ${REWRITE_MODE} | DEBUG: ${DEBUG_MODE}`);
-
-  const trends = analyzeTrendingTopics(2, 5);
-  if(trends.length > 0) {
-    sendLog('🔥 Hot Topics gần đây: ' + trends.map(t => `${t.topic} (${t.count})`).join(', '));
+function validateAndFixContent(aiGeneratedContent) {
+  // Logic validateAndFixContent giữ nguyên
+  if (!aiGeneratedContent || typeof aiGeneratedContent !== 'string') {
+    return null;
   }
 
-  const entries = loadLogEntries();
-  const seenLinks = new Set();
-  const articles = await crawlSources(sources);
+  let title, summary, body = '', question = null;
+  const partsByBold = aiGeneratedContent.split('**');
 
-  if (articles.length === 0) {
-    sendLog('🤷‍♀️ Không tìm thấy bài viết mới trong chu kỳ này.');
-  }
-
-  let articlesProcessedInCycle = 0;
-
-  for (const art of articles) {
-    if (!isCrawlingRunning) {
-      sendLog('🛑 Luồng cào bài đã nhận lệnh dừng. Đang hoàn tất chu kỳ hiện tại...');
-      break;
-    }
-
-    const { title, link, images } = art;
-
-    if (!title || !link) {
-      sendLog(`⚠️ Bỏ qua bài viết thiếu tiêu đề hoặc link.`);
-      continue;
-    }
-    if (seenLinks.has(link) || isLinkPosted(link, entries)) {
-      sendLog(`⏭️  Bỏ qua (đã xử lý/đăng): ${link}`);
-      continue;
-    }
-    seenLinks.add(link);
-
-    if (isTitleSimilarToLog(title, entries)) {
-      sendLog(`⏭️  Tiêu đề gần giống bài cũ: ${title}`);
-      continue;
-    }
-
-    let articleContent = await fetchArticleContent(link);
-    if (articleContent) {
-      articleContent = articleContent.split('\n\n').slice(0, 5).join('\n\n');
-    }
-    if (!articleContent || articleContent.length < 100) {
-      articleContent = title; // Fallback
-    }
+  if (partsByBold.length >= 3) {
+    title = partsByBold[0].trim();
+    summary = `**${partsByBold[1].trim()}**`;
+    const restOfContent = partsByBold.slice(2).join('**').trim();
+    const restOfContentLines = restOfContent.split('\n\n');
+    const lastLine = restOfContentLines[restOfContentLines.length - 1];
     
-    const articleImages = await fetchArticleImages(link);
-    const allImages = [...new Set([...(images || []), ...articleImages])];
-    let rewritten = '';
-    let topics = [];
-    let hashtags = [];
-    if (!isCrawlingRunning) {
-            sendLog('🛑 Đã nhận lệnh dừng. Bỏ qua các bước xử lý AI.', 'warning');
-            break;
-        }
-
-    try {
-        if (REWRITE_MODE === 'ai') {
-            sendLog('🤖 Chế độ AI: Đang viết lại, phân loại và tạo hashtag...');
-            // Gọi API viết lại
-            try {
-                rewritten = await rewriteContent({ title, link, originalContent: articleContent }, config);
-            } catch (error) {
-                if (error instanceof RateLimitError) {
-                    sendLog('⏳ Hết lượt AI. Đang thử lại bằng thuật toán...', 'warning');
-                    rewritten = await rewriteManual({ title, link, originalContent: articleContent });
-                } else {
-                    sendLog(`❌ Lỗi khi viết lại AI cho bài "${title}": ${error.message}`, 'error');
-                    console.error(error);
-                    continue; // Bỏ qua bài viết nếu lỗi không phải do rate limit
-                }
-            }
-
-            // Sau khi viết lại thành công, mới phân tích chủ đề và hashtag
-            // Thêm kiểm tra nếu rewritten rỗng thì bỏ qua
-            if (!rewritten) {
-                sendLog(`⚠️ Bỏ qua bài viết "${title}" do không thể viết lại.`, 'warning');
-                continue;
-            }
-
-            topics = await classifyTopic(`${title}\n\n${articleContent}`, config);
-            hashtags = await extractKeywords(rewritten, config);
-
-        } else { // 'manual' mode
-            sendLog('✍️ Chế độ Thuật toán: Đang tóm tắt cơ bản...');
-            const manualResult = await rewriteManual({ title, link, originalContent: articleContent });
-            rewritten = manualResult.replace(/<br>/g, '\n').replace(/<[^>]*>/g, '');
-        }
-      } catch (error) {
-          let errorMessage = `❌ Lỗi khi viết lại/phân tích AI cho bài "${title}": ${error.message}`;
-          //  Dùng `instanceof` để bắt lỗi một cách chính xác và chuyên nghiệp
-          if (error instanceof RateLimitError) {
-              errorMessage = `⏳ Hết lượt AI hoặc quá tải. Đã chuyển sang chế độ Thuật toán cho bài này.`;
-              rewritten = await rewriteManual({ title, link, originalContent: articleContent });
-          }
-          sendLog(errorMessage, 'error');
-          console.error(error);
-      }
-
-    // Dọn dẹp văn bản
-    let processedText = postProcessText(rewritten);
-    const validatedContent = validateAndFixContent(processedText);
-
-    if (!validatedContent) {
-        sendLog(`⚠️ Bài viết "${title}" không đủ điều kiện định dạng. Bỏ qua.`, 'warning');
-        continue;
+    if (lastLine && lastLine.trim().endsWith('?')) {
+      question = restOfContentLines.pop();
     }
-
-    rewritten = validatedContent;
-
-    if (hashtags.length > 0) {
-      rewritten += `\n\n${hashtags.map(tag => `#${tag.replace(/#/g, '')}`).join(' ')}`;
+    body = restOfContentLines.join(' ');
+  } else {
+    let parts = aiGeneratedContent.split('\n\n').filter(p => p.trim() !== '');
+    if (parts.length < 3) {
+      const processedText = parts.join(' ').replace(/([.!?])\s*(?=[A-ZÀ-Ỹ])/g, '$1\n\n');
+      parts = processedText.split('\n\n').filter(p => p.trim() !== '');
     }
-
-    // Dòng này phải đứng ngay sau khi các biến rewritten, topics, hashtags đã được tạo.
-    let mediaPayload = [];
-    let firstProcessedImageHash = null;
-
-    if (allImages && allImages.length > 0) {
-      const imageProcessingResults = await Promise.all(
-          allImages.slice(0, 5).map(async (imgUrl, index) => {
-              try {
-                  const logEntries = loadLogEntries();
-                  
-                  // Bước 1: Lấy hash của ảnh gốc để kiểm tra trùng lặp
-                  const res = await axios.get(imgUrl, { responseType: 'arraybuffer' });
-                  const originalImageBuffer = Buffer.from(res.data, 'binary');
-                  const originalImageHash = getImageHash(originalImageBuffer);
-
-                  if (isImageHashPosted(originalImageHash, entries)) {
-                      sendLog(`⏭️ Ảnh gốc "${imgUrl}" trùng với log cũ. Bỏ qua.`);
-                      return null;
-                  }
-                  
-                  // Bước 2: Dán logo và lấy buffer đã xử lý
-                  const buffer = await overlayLogo(imgUrl, LOGO_PATH);
-
-                  if (buffer) {
-                      const hash = getImageHash(buffer); // Tính hash của ảnh đã xử lý
-                      if (isImageHashPosted(hash, entries)) {
-                          sendLog(`⏭️ Ảnh sau xử lý trùng với log cũ. Bỏ qua ảnh này.`, 'warning');
-                          return null;
-                      }
-
-                      if (index === 0) {
-                          firstProcessedImageHash = hash;
-                      }
-                      return { buffer, filename: `image_${index}.png` };
-                  }
-              } catch (err) {
-                  sendLog(`⚠️ Lỗi xử lý ảnh ${imgUrl} (index ${index}): ${err.message}. Bỏ qua ảnh này.`, 'warning');
-                  return null;
-              }
-          })
-      );
-
-      mediaPayload = imageProcessingResults.filter(item => item !== null);
-
-      if (firstProcessedImageHash && isImageHashPosted(firstProcessedImageHash, entries)) {
-          sendLog(`⏭️  Ảnh chính trùng với log cũ. Bỏ qua bài viết.`, 'warning');
-          continue;
+    if (parts.length < 3) {
+      return null;
+    }
+    let [tempTitle, tempSummary, ...restOfContent] = parts;
+    title = tempTitle;
+    summary = `**${tempSummary.replace(/\*\*/g, '').trim()}**`;
+    let restOfContentLines = restOfContent;
+    for (let i = restOfContentLines.length - 1; i >= 0; i--) {
+      if (restOfContentLines[i].trim().endsWith('?')) {
+        question = restOfContentLines.splice(i, 1)[0];
+        break;
       }
     }
-
-    // THÊM VÀO HÀNG CHỜ
-    if (rewritten && mediaPayload.length > 0) {
-      postQueue.push({
-        content: rewritten,
-        media: mediaPayload,
-        link: link,
-        title: title,
-        imgHash: firstProcessedImageHash,
-        topics: topics,
-        hashtags: hashtags,
-        rawImages: allImages // Lưu toàn bộ mảng ảnh để hiển thị trên UI
-      });
-      articlesProcessedInCycle++;
-      sendLog(`✅ Bài viết "${title}" đã được thêm vào hàng chờ đăng (${postQueue.length} bài).`);
-      // Gửi nội dung đã được viết lại và ảnh preview lên UI
-      process.send({
-        type: 'new-content',
-        content: {
-          title: title,
-          rewritten: rewritten,
-          images: allImages,
-          link: link
-        }
-      });
-    } else {
-      sendLog(`⚠️ Bài viết "${title}" không đủ điều kiện để thêm vào hàng chờ (thiếu nội dung/ảnh).`, 'warning');
-    }
-
-    // Đợi một chút trước khi xử lý bài tiếp theo để tránh bị block
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    body = restOfContentLines.join(' ');
   }
-  
-  sendLog(`🏁 Hoàn thành chu kỳ cào bài. Đã xử lý ${articlesProcessedInCycle} bài viết.`);
 
-  // Thay thế vòng lặp chờ cũ bằng setTimeout
-  const crawlDelayMs = (CRAWL_LOOP_DELAY_MINUTES || 15) * 60 * 1000;
-  sendLog(`⏳ Đang chờ ${crawlDelayMs / 60000} phút trước khi cào bài tiếp theo...`);
-  setTimeout(startCrawlingLoop, crawlDelayMs);
+  if (!title) {
+    return null;
+  }
+  title = title.toUpperCase().replace(/[.!?]$/, '').trim();
+  
+  if (body) {
+    body = body.replace(/([.!?])([A-ZÀ-Ỹ])/g, '$1 $2');
+    body = body.replace(/([.!?])\s/g, '$1\n\n\n');
+  }
+
+  const result = [title, summary];
+  if (body) result.push(body);
+  if (question) result.push(question);
+  result.push('📌 Link bài viết gốc ở phần bình luận nhé!');
+
+  return result.filter(Boolean).join('\n\n');
 }
 
-// Hàm xử lý hàng chờ đăng bài theo khoảng thời gian
+// HÀM ĐƯỢC DI CHUYỂN LÊN TRƯỚC
 async function processPostQueue() {
   const config = loadConfig();
   const { POST_INTERVAL_MINUTES, DEBUG_MODE } = config;
@@ -308,13 +145,11 @@ async function processPostQueue() {
 
         sendLog(`✅ Đăng thành công lên Facebook với Post ID: ${post.id}`);
 
-        // Tương tác sau khi đăng bài
         if (config.AUTO_LIKE_POSTS) {
             await reactToFacebook(post.id, 'LIKE', config);
             sendLog(`👍 Đã tự động Like bài viết ${post.id}.`);
         }
 
-        // Lên lịch kiểm tra và thả cảm xúc cho bình luận
         if (config.AUTO_REACT_COMMENTS) {
             const delay = (config.AUTO_REACT_COMMENT_DELAY_SECONDS || 60) * 1000;
             setTimeout(async () => {
@@ -326,7 +161,7 @@ async function processPostQueue() {
 
         if (config.SHARE_POST_TO_STORY && postItem.rawImages && postItem.rawImages.length > 0) {
             const postUrl = `https://www.facebook.com/${config.FB_PAGE_ID}/posts/${post.id}`;
-            const imageUrl = postItem.rawImages[0]; // Lấy ảnh đầu tiên của bài viết
+            const imageUrl = postItem.rawImages[0];
             try {
                 await postStoryWithLink(imageUrl, postUrl, config);
                 sendLog(`📸 Đã chia sẻ bài viết lên 'Tin của bạn'.`);
@@ -344,11 +179,7 @@ async function processPostQueue() {
             hashtags: postItem.hashtags
         });
 
-        //  Gửi thông điệp sau khi đăng thành công và lưu log
-        process.send({
-          type: 'post-success',
-          content: { link: postItem.link, postId: post.id }
-        });
+        sendLog('post-success', 'post-success', { link: postItem.link, postId: post.id });
 
         if (config.REWRITE_MODE === 'ai') {
             incrementUsed(config);
@@ -364,32 +195,6 @@ async function processPostQueue() {
   }
 }
 
-// Lắng nghe tin nhắn từ tiến trình chính (main.mjs)
-process.on('message', (msg) => {
-  if (msg.command === 'start') {
-    if (!isCrawlingRunning) {
-      isCrawlingRunning = true;
-      startCrawlingLoop(); // Bắt đầu luồng cào bài
-      // Bắt đầu kiểm tra hàng chờ đăng bài mỗi phút
-      if (postIntervalId) clearInterval(postIntervalId); // Xóa nếu đã có
-      postIntervalId = setInterval(processPostQueue, 60 * 1000); // Kiểm tra hàng chờ mỗi phút
-      sendLog('Tiến trình cào và lập lịch đăng bài đã khởi động.');
-    }
-  } else if (msg.command === 'stop') {
-    isCrawlingRunning = false;
-    sendLog('🛑 Đã nhận lệnh dừng. Đang hoàn tất chu kỳ hiện tại...');
-  }
-  else if (msg.command === 'remove-post') {
-    const linkToRemove = msg.link;
-    const initialLength = postQueue.length;
-    postQueue = postQueue.filter(post => post.link !== linkToRemove);
-    if (postQueue.length < initialLength) {
-        console.log(`✅ Đã xóa bài viết có link: ${linkToRemove}`);
-        // Gửi thông báo thành công về renderer nếu cần
-        process.send({ type: 'log', message: `✅ Đã xóa bài viết khỏi hàng chờ.`, contentType: 'success' });
-    }
-  }
-});
 async function handleCommentReactions(postId, config) {
     try {
         const { FB_PAGE_TOKEN, FB_GRAPH_API_VERSION, COMMENT_REACTION_TYPE } = config;
@@ -401,7 +206,6 @@ async function handleCommentReactions(postId, config) {
         if (comments && comments.length > 0) {
             sendLog(`💬 Tìm thấy ${comments.length} bình luận trên bài viết ${postId}. Đang bắt đầu tương tác...`);
             for (const comment of comments) {
-                // Tự động thả cảm xúc cho tất cả các bình luận
                 await reactToFacebook(comment.id, COMMENT_REACTION_TYPE || 'LOVE', config);
                 sendLog(`💖 Đã thả cảm xúc "${COMMENT_REACTION_TYPE || 'LOVE'}" vào bình luận của user ID: ${comment.from.id}`);
             }
@@ -412,104 +216,253 @@ async function handleCommentReactions(postId, config) {
         console.error('❌ Lỗi khi xử lý bình luận:', error.response?.data?.error?.message || error.message);
     }
 }
-/**
- * Chuẩn hóa và định dạng nội dung được tạo bởi AI.
- * Nội dung sẽ được tách thành Tiêu đề, Tóm tắt, Thân bài và Câu hỏi.
- * Các phần sẽ được nối lại với nhau, mỗi phần cách nhau một dòng trống.
- *
- * @param {string} aiGeneratedContent Nội dung văn bản thô được tạo bởi AI.
- * @returns {string|null} Nội dung đã được định dạng hoặc null nếu không hợp lệ.
- */
-/**
- * Chuẩn hóa và định dạng nội dung được tạo bởi AI.
- * Nội dung sẽ được tách thành Tiêu đề, Tóm tắt, Thân bài và Câu hỏi.
- * Các phần sẽ được nối lại với nhau, mỗi phần cách nhau một dòng trống.
- *
- * @param {string} aiGeneratedContent Nội dung văn bản thô được tạo bởi AI.
- * @returns {string|null} Nội dung đã được định dạng hoặc null nếu không hợp lệ.
- */
-function validateAndFixContent(aiGeneratedContent) {
-  // Bước 1: Kiểm tra đầu vào.
-  if (!aiGeneratedContent || typeof aiGeneratedContent !== 'string') {
-    return null;
+
+async function crawlingLoop() {
+  if (!isCrawlingRunning) {
+    sendLog('🛑 Luồng cào bài đã nhận lệnh dừng và thoát.', 'stopped');
+    return;
   }
 
-  let title, summary, body = '', question = null;
+  sendLog(`\n🔄 Bắt đầu chu kỳ cào bài mới [${new Date().toLocaleString()}]`);
 
-  // Bước 2: Tách nội dung dựa trên cấu trúc đã cho.
-  // Ưu tiên tách dựa trên cặp dấu **
-  const partsByBold = aiGeneratedContent.split('**');
+  const config = loadConfig();
+  const { REWRITE_MODE, DEBUG_MODE, sources, LOGO_PATH, CRAWL_LOOP_DELAY_MINUTES } = config;
+  sendLog(`⚙️  Chế độ: ${REWRITE_MODE} | DEBUG: ${DEBUG_MODE}`);
 
-  if (partsByBold.length >= 3) {
-    // Tách thành Tiêu đề, Tóm tắt và Phần còn lại.
-    title = partsByBold[0].trim();
-    summary = `**${partsByBold[1].trim()}**`;
-    const restOfContent = partsByBold.slice(2).join('**').trim();
+  const trends = analyzeTrendingTopics(2, 5);
+  if (trends.length > 0) {
+    sendLog('🔥 Hot Topics gần đây: ' + trends.map(t => `${t.topic} (${t.count})`).join(', '));
+  }
 
-    // Tách phần thân bài và câu hỏi cuối cùng
-    const restOfContentLines = restOfContent.split('\n\n');
-    const lastLine = restOfContentLines[restOfContentLines.length - 1];
-    
-    if (lastLine && lastLine.trim().endsWith('?')) {
-      question = restOfContentLines.pop();
+  const entries = loadLogEntries();
+  const seenLinks = new Set();
+  const articles = await crawlSources(sources);
+  const seenImagesInQueue = new Set(postQueue.map(item => item.imgHash));
+
+  if (articles.length === 0) {
+    sendLog('🤷‍♀️ Không tìm thấy bài viết mới trong chu kỳ này.');
+  }
+
+  let articlesProcessedInCycle = 0;
+
+  for (const art of articles) {
+    if (!isCrawlingRunning) {
+      sendLog('🛑 Luồng cào bài đã nhận lệnh dừng. Đang hoàn tất chu kỳ hiện tại...');
+      break;
     }
-    body = restOfContentLines.join(' '); // Nối các đoạn thành một chuỗi duy nhất để dễ xử lý
 
-  } else {
-    // Logic dự phòng nếu không tìm thấy **
-    // Tách các đoạn dựa trên dấu xuống dòng
-    let parts = aiGeneratedContent.split('\n\n').filter(p => p.trim() !== '');
+    const { title, link, images } = art;
 
-    if (parts.length < 3) {
-      // Nếu không đủ đoạn, thử tách dựa trên dấu câu
-      const processedText = parts.join(' ').replace(/([.!?])\s*(?=[A-ZÀ-Ỹ])/g, '$1\n\n');
-      parts = processedText.split('\n\n').filter(p => p.trim() !== '');
+    if (!title || !link) {
+      sendLog(`⚠️ Bỏ qua bài viết thiếu tiêu đề hoặc link.`);
+      continue;
+    }
+    if (seenLinks.has(link) || isLinkPosted(link, entries)) {
+      sendLog(`⏭️  Bỏ qua (đã xử lý/đăng): ${link}`);
+      continue;
+    }
+    seenLinks.add(link);
+
+    if (isTitleSimilarToLog(title, entries)) {
+      sendLog(`⏭️  Tiêu đề gần giống bài cũ: ${title}`);
+      continue;
+    }
+
+    let articleContent = await fetchArticleContent(link);
+    if (articleContent) {
+      articleContent = articleContent.split('\n\n').slice(0, 5).join('\n\n');
+    }
+    if (!articleContent || articleContent.length < 100) {
+      articleContent = title;
     }
     
-    if (parts.length < 3) {
-      return null;
+    const articleImages = await fetchArticleImages(link);
+    const allImages = [...new Set([...(images || []), ...articleImages])];
+    let rewritten = '';
+    let topics = [];
+    let hashtags = [];
+    if (!isCrawlingRunning) {
+            sendLog('🛑 Đã nhận lệnh dừng. Bỏ qua các bước xử lý AI.', 'warning');
+            break;
+        }
+
+    try {
+        if (REWRITE_MODE === 'ai') {
+            sendLog('🤖 Chế độ AI: Đang viết lại, phân loại và tạo hashtag...');
+            try {
+                rewritten = await rewriteContent({ title, link, originalContent: articleContent }, config);
+            } catch (error) {
+                if (error instanceof RateLimitError) {
+                    sendLog('⏳ Hết lượt AI. Đang thử lại bằng thuật toán...', 'warning');
+                    rewritten = await rewriteManual({ title, link, originalContent: articleContent });
+                } else {
+                    sendLog(`❌ Lỗi khi viết lại AI cho bài "${title}": ${error.message}`, 'error');
+                    console.error(error);
+                    continue;
+                }
+            }
+
+            if (!rewritten) {
+                sendLog(`⚠️ Bỏ qua bài viết "${title}" do không thể viết lại.`, 'warning');
+                continue;
+            }
+
+            topics = await classifyTopic(`${title}\n\n${articleContent}`, config);
+            hashtags = await extractKeywords(rewritten, config);
+
+        } else {
+            sendLog('✍️ Chế độ Thuật toán: Đang tóm tắt cơ bản...');
+            const manualResult = await rewriteManual({ title, link, originalContent: articleContent });
+            rewritten = manualResult.replace(/<br>/g, '\n').replace(/<[^>]*>/g, '');
+        }
+      } catch (error) {
+          let errorMessage = `❌ Lỗi khi viết lại/phân tích AI cho bài "${title}": ${error.message}`;
+          if (error instanceof RateLimitError) {
+              errorMessage = `⏳ Hết lượt AI hoặc quá tải. Đã chuyển sang chế độ Thuật toán cho bài này.`;
+              rewritten = await rewriteManual({ title, link, originalContent: articleContent });
+          }
+          sendLog(errorMessage, 'error');
+          console.error(error);
+      }
+
+    let processedText = postProcessText(rewritten);
+    const validatedContent = validateAndFixContent(processedText);
+
+    if (!validatedContent) {
+        sendLog(`⚠️ Bài viết "${title}" không đủ điều kiện định dạng. Bỏ qua.`, 'warning');
+        continue;
     }
-    
-    // Tách các phần
-    let [tempTitle, tempSummary, ...restOfContent] = parts;
-    title = tempTitle;
-    summary = `**${tempSummary.replace(/\*\*/g, '').trim()}**`;
-    
-    let restOfContentLines = restOfContent;
-    for (let i = restOfContentLines.length - 1; i >= 0; i--) {
-      if (restOfContentLines[i].trim().endsWith('?')) {
-        question = restOfContentLines.splice(i, 1)[0];
-        break;
+
+    rewritten = validatedContent;
+
+    if (hashtags.length > 0) {
+      rewritten += `\n\n${hashtags.map(tag => `#${tag.replace(/#/g, '')}`).join(' ')}`;
+    }
+
+    let mediaPayload = [];
+    let firstProcessedImageHash = null;
+
+    if (allImages && allImages.length > 0) {
+      const imageProcessingResults = await Promise.all(
+          allImages.slice(0, 5).map(async (imgUrl, index) => {
+              try {
+                  const logEntries = loadLogEntries();
+                  const res = await axios.get(imgUrl, { responseType: 'arraybuffer' });
+                  const originalImageBuffer = Buffer.from(res.data, 'binary');
+                  const originalImageHash = getImageHash(originalImageBuffer);
+
+                  if (isImageHashPosted(originalImageHash, entries)) {
+                      sendLog(`⏭️ Ảnh gốc "${imgUrl}" trùng với log cũ. Bỏ qua.`);
+                      return null;
+                  }
+                  // THÊM KIỂM TRA MỚI: kiểm tra ảnh có trong hàng chờ chưa
+                  if (seenImagesInQueue.has(originalImageHash)) {
+                      sendLog(`⏭️ Ảnh gốc "${imgUrl}" trùng với ảnh đang chờ. Bỏ qua.`);
+                      return null;
+                  }
+                  
+                  const buffer = await overlayLogo(imgUrl, LOGO_PATH);
+
+                  if (buffer) {
+                      const hash = getImageHash(buffer);
+                      if (isImageHashPosted(hash, entries)) {
+                          sendLog(`⏭️ Ảnh sau xử lý trùng với log cũ. Bỏ qua ảnh này.`, 'warning');
+                          return null;
+                      }
+                      // THÊM KIỂM TRA MỚI: kiểm tra ảnh có trong hàng chờ chưa
+                      if (seenImagesInQueue.has(hash)) {
+                          sendLog(`⏭️ Ảnh sau xử lý trùng với ảnh đang chờ. Bỏ qua.`);
+                          return null;
+                      }
+
+                      if (index === 0) {
+                          firstProcessedImageHash = hash;
+                          seenImagesInQueue.add(firstProcessedImageHash);
+                      }
+                      return { buffer, filename: `image_${index}.png` };
+                  }
+              } catch (err) {
+                  sendLog(`⚠️ Lỗi xử lý ảnh ${imgUrl} (index ${index}): ${err.message}. Bỏ qua ảnh này.`, 'warning');
+                  return null;
+              }
+          })
+      );
+
+      mediaPayload = imageProcessingResults.filter(item => item !== null);
+
+      if (firstProcessedImageHash && isImageHashPosted(firstProcessedImageHash, entries)) {
+          sendLog(`⏭️  Ảnh chính trùng với log cũ. Bỏ qua bài viết.`, 'warning');
+          continue;
       }
     }
-    body = restOfContentLines.join(' '); // Nối các đoạn thành một chuỗi duy nhất để dễ xử lý
-  }
 
-  // Bước 3: Chuẩn hóa các phần nội dung
-  // Đảm bảo tiêu đề luôn in hoa và không có dấu kết thúc câu.
-  if (!title) {
-    return null;
+    if (rewritten && mediaPayload.length > 0) {
+      postQueue.push({
+        content: rewritten,
+        media: mediaPayload,
+        link: link,
+        title: title,
+        imgHash: firstProcessedImageHash,
+        topics: topics,
+        hashtags: hashtags,
+        rawImages: allImages
+      });
+      articlesProcessedInCycle++;
+      sendLog(`✅ Bài viết "${title}" đã được thêm vào hàng chờ đăng (${postQueue.length} bài).`);
+      sendLog('new-content', 'new-content', {
+          title: title,
+          rewritten: rewritten,
+          images: allImages,
+          link: link
+      });
+    } else {
+      sendLog(`⚠️ Bài viết "${title}" không đủ điều kiện để thêm vào hàng chờ (thiếu nội dung/ảnh).`, 'warning');
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
-  title = title.toUpperCase().replace(/[.!?]$/, '').trim();
   
-  // Thay thế các dấu kết thúc câu bằng hai dấu xuống dòng để tạo khoảng trắng
-  if (body) {
-    // Thêm một dấu cách sau dấu kết thúc câu để đảm bảo tính đồng nhất trước khi xử lý
-    body = body.replace(/([.!?])([A-ZÀ-Ỹ])/g, '$1 $2');
-    // Bây giờ, thay thế tất cả các dấu kết thúc câu bằng chính nó, sau đó là hai dấu xuống dòng
-    body = body.replace(/([.!?])\s/g, '$1\n\n\n');
-  }
+  sendLog(`🏁 Hoàn thành chu kỳ cào bài. Đã xử lý ${articlesProcessedInCycle} bài viết.`);
 
-  // Bước 4: Ghép các phần nội dung lại với nhau
-  const result = [title, summary];
-  if (body) {
-    result.push(body);
-  }
-  if (question) {
-    result.push(question);
-  }
-  result.push('📌 Link bài viết gốc ở phần bình luận nhé!');
+  const crawlDelayMs = (CRAWL_LOOP_DELAY_MINUTES || 15) * 60 * 1000;
+  sendLog(`⏳ Đang chờ ${crawlDelayMs / 60000} phút trước khi cào bài tiếp theo...`);
+  setTimeout(crawlingLoop, crawlDelayMs);
+}
 
-  // Cuối cùng, nối tất cả các phần đã được chuẩn hóa bằng hai dấu xuống dòng
-  return result.filter(Boolean).join('\n\n');
+// Các hàm processPostQueue, handleCommentReactions giữ nguyên
+
+export function startCrawlingLoop(callback = console.log) {
+  if (isCrawlingRunning) {
+    sendLog('❗ Luồng tự động đã chạy rồi.');
+    return;
+  }
+  logCallback = callback;
+  isCrawlingRunning = true;
+  crawlingLoop();
+
+  if (postIntervalId) clearInterval(postIntervalId);
+  postIntervalId = setInterval(processPostQueue, 60 * 1000);
+
+  sendLog('Tiến trình cào và lập lịch đăng bài đã khởi động.', 'running');
+}
+
+export function stopCrawlingLoop() {
+  if (!isCrawlingRunning) {
+    sendLog('❗ Không có luồng tự động nào để dừng.');
+    return;
+  }
+  isCrawlingRunning = false;
+  if (postIntervalId) clearInterval(postIntervalId);
+  postIntervalId = null;
+  sendLog('🛑 Đã nhận lệnh dừng. Đang hoàn tất chu kỳ hiện tại...', 'stopping');
+}
+
+export function removePostFromQueue(linkToRemove) {
+    const initialLength = postQueue.length;
+    postQueue = postQueue.filter(post => post.link !== linkToRemove);
+    return postQueue.length < initialLength;
+}
+
+export function getPostQueue() {
+    return postQueue;
 }

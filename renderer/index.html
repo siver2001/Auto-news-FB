@@ -160,7 +160,8 @@
         <label>Graph API Version:</label><input name="FB_GRAPH_API_VERSION" type="text" />
         <label for="logoPathInput">🖼️ Logo chèn vào ảnh (bỏ trống nếu không dùng):</label>
         <div style="display: flex; gap: 10px; align-items: center;">
-          <input type="text" name="LOGO_PATH" id="logoPathInput" placeholder="Chọn file logo..." style="flex: 1;">
+          <input type="file" id="logoFileInput" style="display: none;">
+          <input type="text" name="LOGO_PATH" id="logoPathInput" placeholder="Chọn file logo..." style="flex: 1;" readonly>
           <button type="button" id="browseLogoBtn">Chọn Logo</button>
         </div>
         <label>Chế độ viết lại:</label><select name="REWRITE_MODE" id="modeSelect"><option value="ai" selected>AI (tự động tóm tắt)</option><option value="manual">Thuật toán (không dùng AI)</option></select>
@@ -187,7 +188,7 @@
       <p id="status"></p>
     </div>
     <div class="preview-container">
-      <h3>📝 Nội dung đang chờ</h3>
+      <h3 id="queueStatus">📝 Nội dung đang chờ</h3>
       <div id="rewritten" class="rewritten-box"></div>
     </div>
     <div class="posted-container">
@@ -195,6 +196,6 @@
       <div id="posted" class="rewritten-box"></div>
     </div>
   </div>
-  <script src="./scripts/renderer.js"></script>
+  <script src="./scripts/renderer.js" type="module"></script>
 </body>
 </html>

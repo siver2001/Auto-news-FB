@@ -1,39 +1,21 @@
-// src/configLoader.js
+// src/configLoader.js (Đã tái cấu trúc cho môi trường web)
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import { fileURLToPath } from 'url';
 
 /**
- * Trả về đường dẫn file config.json tại thư mục dự án
- * (cùng cấp với main.mjs). File này sẽ là nguồn cấu hình duy nhất.
+ * Trả về đường dẫn file config.json tại thư mục gốc của dự án.
  */
 function getProjectConfigPath() {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   // src/configLoader.js -> lên 1 cấp là project root
   const projectRoot = path.resolve(__dirname, '..');
-  const configFilePath = path.join(projectRoot, 'config.json');
-  console.log(`[ConfigLoader] Sử dụng file cấu hình tại: ${configFilePath}`);
-  return configFilePath;
-}
-
-/**
- * Đường dẫn legacy (AppData/.config) để hỗ trợ di trú cấu hình cũ nếu có
- */
-function getLegacyConfigPath() {
-  const APP_NAME = 'Auto Update FB';
-  const legacyDir = path.join(
-    os.homedir(),
-    process.platform === 'win32' ? 'AppData/Roaming' : '.config',
-    APP_NAME
-  );
-  return path.join(legacyDir, 'config.json');
+  return path.join(projectRoot, 'config.json');
 }
 
 /**
  * Tạo cấu hình mặc định nếu chưa có file.
- * Thêm cả CLOUD_API_URL để linh hoạt chọn nhà cung cấp.
  */
 function getDefaultConfig() {
   return {
@@ -55,10 +37,14 @@ function getDefaultConfig() {
   };
 }
 
+/**
+ * Đọc cấu hình từ file config.json.
+ * Nếu file không tồn tại hoặc bị lỗi, sẽ tạo file mặc định.
+ * @returns {object} Đối tượng cấu hình.
+ */
 export function loadConfig() {
   const projectPath = getProjectConfigPath();
 
-  // 1) Nếu đã có file tại thư mục dự án -> đọc luôn
   if (fs.existsSync(projectPath)) {
     try {
       const raw = fs.readFileSync(projectPath, 'utf-8');
@@ -72,27 +58,17 @@ export function loadConfig() {
     }
   }
 
-  // 2) Nếu chưa có, thử di trú từ file legacy (AppData/.config)
-  const legacyPath = getLegacyConfigPath();
-  if (fs.existsSync(legacyPath)) {
-    try {
-      const raw = fs.readFileSync(legacyPath, 'utf-8');
-      const legacyConfig = JSON.parse(raw);
-      fs.writeFileSync(projectPath, JSON.stringify(legacyConfig, null, 2));
-      console.log('[ConfigLoader] ✅ Đã di trú cấu hình từ legacy sang project config.json.');
-      return legacyConfig;
-    } catch (err) {
-      console.warn('[ConfigLoader] ⚠️ Không thể di trú cấu hình legacy:', err.message);
-    }
-  }
-
-  // 3) Không có file nào -> tạo mới mặc định tại project
+  // Nếu không có file nào -> tạo mới mặc định tại project
   const def = getDefaultConfig();
   fs.writeFileSync(projectPath, JSON.stringify(def, null, 2));
   console.log('[ConfigLoader] Tạo file cấu hình mặc định tại project.');
   return def;
 }
 
+/**
+ * Lưu cấu hình vào file config.json.
+ * @param {object} config - Đối tượng cấu hình cần lưu.
+ */
 export function saveConfig(config) {
   const projectPath = getProjectConfigPath();
   try {
