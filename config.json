@@ -7,7 +7,7 @@
   "FB_PAGE_TOKEN": "EAAcLVV7l3e8BPLa3P5HUDXqXegzmGZA40GZADQNplxI4ZCvFK3eBsAYeyll4ZBBeSpZBm47OmOXyZCvEVGECB42ZBZCJtWYXy1bXCEBDPFGQHozr0L1uWl4aJigI4eP6BXKKjObhOOLn5SrBLpZBoZBp3g7cZCw8sCW1bqQssLdWC95uxDYQzytkgTDPkFYUHSD6QZCDZCciI",
   "FB_GRAPH_API_VERSION": "v23.0",
   "LOGO_PATH": "C:\\Users\\Admin\\Auto-news-FB\\data\\logo\\TRENDY (2).png",
-  "REWRITE_MODE": "ai",
+  "REWRITE_MODE": "manual",
   "POST_INTERVAL_MINUTES": 10,
   "CRAWL_LOOP_DELAY_MINUTES": 15,
   "sources[]": "https://baochinhphu.vn",
@@ -21,6 +21,5 @@
     "https://dantri.com.vn",
     "https://vietnamnet.vn",
     "https://baochinhphu.vn"
-  ],
-  "USED": 3
+  ]
 }

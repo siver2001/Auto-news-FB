@@ -324,15 +324,6 @@ async function crawlingLoop() {
           console.error(error);
       }
 
-    let processedText = postProcessText(rewritten);
-    const validatedContent = validateAndFixContent(processedText);
-
-    if (!validatedContent) {
-        sendLog(`⚠️ Bài viết "${title}" không đủ điều kiện định dạng. Bỏ qua.`, 'warning');
-        continue;
-    }
-
-    rewritten = validatedContent;
 
     if (hashtags.length > 0) {
       rewritten += `\n\n${hashtags.map(tag => `#${tag.replace(/#/g, '')}`).join(' ')}`;
