@@ -13,6 +13,7 @@
   "author": "",
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@google/genai": "^1.14.0",
     "axios": "^1.9.0",
     "canvas": "^3.1.0",
     "cheerio": "^1.1.0",

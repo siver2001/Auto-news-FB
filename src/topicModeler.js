@@ -21,10 +21,10 @@ ${text}
         headers: buildAuthHeaders(config),
         body: JSON.stringify({
           model: MODEL,
-          messages: [
-            { role: 'system', content: 'Bạn là một trợ lý AI chuyên phân loại nội dung tin tức một cách ngắn gọn và chính xác.' },
-            { role: 'user', content: prompt }
-          ]
+          contents: [{
+            role: 'user',
+            parts: [{ text: prompt }]
+          }]
         })
       });
 
@@ -45,7 +45,7 @@ ${text}
       }
 
       const json = JSON.parse(rawResponseText);
-      const textResponse = json.choices?.[0]?.message?.content || '';
+      const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
       return textResponse
         .split(',')

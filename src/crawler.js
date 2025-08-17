@@ -299,7 +299,7 @@ export async function fetchArticleImages(url) {
         return [];
     }
 }
-async function isHighResImage(url, minSizeInBytes = 50000) { // Ví dụ: 50KB
+async function isHighResImage(url, minSizeInBytes = 100000) { // Ví dụ: 50KB
   try {
     const res = await axios.head(url, { timeout: 5000 });
     const contentType = res.headers['content-type'];

@@ -19,7 +19,6 @@ import {
   isImageHashPosted,
   saveLogEntry,
 } from './src/logger.js';
-import { postProcessText } from './src/textProcessor.js';
 
 const HASH_ALGO = 'md5';
 
@@ -346,7 +345,6 @@ async function crawlingLoop() {
       const imageProcessingResults = await Promise.all(
           allImages.slice(0, 5).map(async (imgUrl, index) => {
               try {
-                  const logEntries = loadLogEntries();
                   const res = await axios.get(imgUrl, { responseType: 'arraybuffer' });
                   const originalImageBuffer = Buffer.from(res.data, 'binary');
                   const originalImageHash = getImageHash(originalImageBuffer);
@@ -419,7 +417,7 @@ async function crawlingLoop() {
       sendLog(`⚠️ Bài viết "${title}" không đủ điều kiện để thêm vào hàng chờ (thiếu nội dung/ảnh).`, 'warning');
     }
 
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(resolve => setTimeout(resolve, 10000));
   }
   
   sendLog(`🏁 Hoàn thành chu kỳ cào bài. Đã xử lý ${articlesProcessedInCycle} bài viết.`);

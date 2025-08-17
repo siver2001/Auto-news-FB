@@ -19,10 +19,10 @@ Chỉ trả về danh sách keyword, không giải thích thêm.
         headers: buildAuthHeaders(config),
         body: JSON.stringify({
           model: MODEL,
-          messages: [
-            { role: 'system', content: 'Bạn là trợ lý AI chuyên phân tích SEO và marketing.' },
-            { role: 'user', content: prompt }
-          ]
+          contents: [{
+            role: 'user',
+            parts: [{ text: prompt }]
+          }]
         })
       });
 
@@ -43,7 +43,7 @@ Chỉ trả về danh sách keyword, không giải thích thêm.
       }
       
       const json = JSON.parse(rawResponseText);
-      const textResponse = json.choices?.[0]?.message?.content || '';
+      const textResponse = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
       const keywords = textResponse
         .split(',')

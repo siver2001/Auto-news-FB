@@ -53,7 +53,7 @@ ${originalContent}
   if (AI_SOURCE === 'cloud' && !API_KEY) {
     throw new Error("Chưa cấu hình API Key cho chế độ Cloud.");
   }
-  
+
   let retries = 3;
   while(retries > 0) {
     try {
@@ -62,17 +62,17 @@ ${originalContent}
           headers: buildAuthHeaders(config),
           body: JSON.stringify({
               model: MODEL,
-              messages: [
-                  { role: 'system', content: 'Bạn là một biên tập viên tin tức chuyên nghiệp, chỉ tóm tắt nội dung được cung cấp.' },
-                  { role: 'user', content: prompt }
-              ]
+              contents: [{
+                role: 'user',
+                parts: [{ text: prompt }]
+              }]
           })
       });
-      
+
       const rawResponseText = await res.text();
-  
+
       if (!res.ok) {
-          if (res.status === 429) { 
+          if (res.status === 429) {
             const errorJson = JSON.parse(rawResponseText);
             const retryInfo = errorJson.error?.details?.find(d => d['@type'] === 'type.googleapis.com/google.rpc.RetryInfo');
             const retryDelaySeconds = retryInfo ? parseInt(retryInfo.retryDelay) : 60; // Default to 60s
@@ -83,12 +83,12 @@ ${originalContent}
           }
           throw new Error(`Lỗi API (${res.status}): ${rawResponseText}`);
       }
-      
+
       const json = JSON.parse(rawResponseText);
-      const text = json.choices?.[0]?.message?.content.trim();
-      
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text.trim();
+
       if (!text) { throw new Error("AI trả về nội dung trống."); }
-  
+
       return text;
 
     } catch (error) {
