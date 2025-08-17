@@ -309,7 +309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     // Sử dụng WebSocket để nhận thông tin cập nhật theo thời gian thực
-    const ws = new WebSocket(`ws://localhost:${window.location.port || '3000'}/ws`);
+    const ws = new WebSocket(`ws://${window.location.host}/ws`);
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       handleBackendLog(data);
