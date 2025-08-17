@@ -29,6 +29,33 @@ async function uploadUnpublishedPhoto(photoData, config) {
     return null;
   }
 }
+/**
+ * Upload một video (URL hoặc buffer) lên Facebook.
+ */
+async function uploadVideo(videoData, config, message = '') {
+  const { FB_PAGE_ID, FB_PAGE_TOKEN, FB_GRAPH_API_VERSION } = config;
+  const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/videos`;
+
+  const form = new FormData();
+  form.append('access_token', FB_PAGE_TOKEN);
+  if (message) {
+    form.append('description', message);
+  }
+
+  if (videoData && videoData.buffer) {
+    form.append('source', videoData.buffer, { filename: videoData.filename, contentType: 'video/mp4' });
+  } else {
+    return null;
+  }
+
+  try {
+    const response = await axios.post(url, form, { headers: form.getHeaders() });
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Lỗi upload video:`, error.response?.data?.error?.message || error.message);
+    return null;
+  }
+}
 
 /**
  * Đăng bài viết lên fanpage Facebook hoặc comment.
@@ -51,36 +78,40 @@ async function postToFacebook(message, mediaItems = [], config, targetPostId = n
     return axios.post(url, { message, access_token: FB_PAGE_TOKEN }).then(res => res.data);
   }
   
-  // Chế độ đăng bài mới
+  /// Kiểm tra loại nội dung để quyết định đăng ảnh hay video
   const validMedia = Array.isArray(mediaItems) ? mediaItems.filter(item => item) : [];
+  const isVideo = validMedia.length > 0 && validMedia[0].filename.endsWith('.mp4');
 
-  // Đăng bài không có ảnh
+  // Đăng bài không có ảnh/video
   if (validMedia.length === 0) {
     const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/feed`;
     return axios.post(url, { message, access_token: FB_PAGE_TOKEN }).then(res => res.data);
   }
 
-  // Đăng bài có 1 ảnh (buffer) hoặc nhiều ảnh
-  const uploadPromises = validMedia.map(item => uploadUnpublishedPhoto(item, config));
-  const photoIds = (await Promise.all(uploadPromises)).filter(id => id);
+  if (isVideo) {
+      // Đăng video trực tiếp
+      return uploadVideo(validMedia[0], config, message);
+  } else {
+      // Logic đăng ảnh cũ
+      const uploadPromises = validMedia.map(item => uploadUnpublishedPhoto(item, config));
+      const photoIds = (await Promise.all(uploadPromises)).filter(id => id);
 
-  if (photoIds.length === 0) {
-    console.error("❌ Không upload được ảnh nào, thử đăng bài dạng text.");
-    return postToFacebook(message, [], config);
+      if (photoIds.length === 0) {
+        console.error("❌ Không upload được ảnh nào, thử đăng bài dạng text.");
+        return postToFacebook(message, [], config);
+      }
+
+      const form = new FormData();
+      form.append('message', message);
+      form.append('access_token', FB_PAGE_TOKEN);
+      photoIds.forEach((id, i) => {
+        form.append(`attached_media[${i}]`, JSON.stringify({ media_fbid: id }));
+      });
+
+      const feedUrl = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/feed`;
+      const response = await axios.post(feedUrl, form, { headers: form.getHeaders() });
+      return response.data;
   }
-
-  // Cách bền vững: dùng form-data với attached_media[i]
-  const form = new FormData();
-  form.append('message', message);
-  form.append('access_token', FB_PAGE_TOKEN);
-  photoIds.forEach((id, i) => {
-    form.append(`attached_media[${i}]`, JSON.stringify({ media_fbid: id }));
-  });
-
-  const feedUrl = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/feed`;
-  const response = await axios.post(feedUrl, form, { headers: form.getHeaders() });
-  return response.data;
-  
 }
 /**
  * Thả cảm xúc vào một bài viết hoặc comment trên Facebook.
@@ -112,14 +143,13 @@ async function reactToFacebook(objectId, reactionType = 'LIKE', config) {
  */
 async function postStoryWithLink(imageUrl, postUrl, config) {
   const { FB_PAGE_ID, FB_PAGE_TOKEN, FB_GRAPH_API_VERSION } = config;
-  const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/photos`;
+  // Sử dụng endpoint Story chuyên dụng, không phải endpoint /photos
+  const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/stories`;
 
   const form = new FormData();
   form.append('access_token', FB_PAGE_TOKEN);
-  form.append('url', imageUrl);
-  form.append('published', 'true');
-  form.append('is_post', 'false');
-  form.append('link', postUrl);
+  form.append('file_url', imageUrl); // Tham số mới để chỉ định URL ảnh cho Story
+  form.append('link_url', postUrl); // Tham số mới để tạo link sticker cho Story
 
   try {
     const response = await axios.post(url, form, { headers: form.getHeaders() });
@@ -129,5 +159,31 @@ async function postStoryWithLink(imageUrl, postUrl, config) {
     throw new Error('Không thể đăng Story lên Facebook.');
   }
 }
+/**
+ * Upload một video (URL hoặc buffer) lên Facebook dưới dạng chưa công bố.
+ */
+async function uploadUnpublishedVideo(videoData, config) {
+  const { FB_PAGE_ID, FB_PAGE_TOKEN, FB_GRAPH_API_VERSION } = config;
+  const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/videos`;
 
-export { postToFacebook, reactToFacebook, postStoryWithLink };
+  const form = new FormData();
+  form.append('access_token', FB_PAGE_TOKEN);
+  form.append('published', 'false');
+
+  if (typeof videoData === 'string') {
+    form.append('file_url', videoData);
+  } else if (videoData && videoData.buffer) {
+    form.append('source', videoData.buffer, { filename: videoData.filename, contentType: 'video/mp4' });
+  } else {
+    return null;
+  }
+
+  try {
+    const response = await axios.post(url, form, { headers: form.getHeaders() });
+    return response.data.id;
+  } catch (error) {
+    console.error(`❌ Lỗi upload video:`, error.response?.data?.error?.message || error.message);
+    return null;
+  }
+}
+export { postToFacebook, reactToFacebook, postStoryWithLink, uploadUnpublishedVideo };

@@ -14,6 +14,7 @@ const __dirname = dirname(__filename);
 
 let mainWindow = null;
 let crawlerProcess = null;
+let reelsProcess = null;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -40,7 +41,11 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         if (crawlerProcess) {
             crawlerProcess.kill('SIGTERM');
-            console.log('Crawler process stopped due to app close.');
+            console.log('News crawler process stopped due to app close.');
+        }
+        if (reelsProcess) {
+            reelsProcess.kill('SIGTERM');
+            console.log('Reels crawler process stopped due to app close.');
         }
         app.quit();
     }
@@ -125,6 +130,72 @@ ipcMain.on('stop-auto-post', () => {
     } else {
         console.log('No crawler process to stop.');
         mainWindow.webContents.send('show-notification', { type: 'info', message: '❗ Không có luồng tự động nào để dừng.' });
+    }
+});
+
+ipcMain.on('start-reels-post', (event, configUpdate) => {
+    console.log('Nhận lệnh START REELS POST');
+    const currentConfig = loadConfig();
+    Object.assign(currentConfig, configUpdate);
+    saveConfig(currentConfig);
+
+    if (!reelsProcess || reelsProcess.killed) {
+        reelsProcess = fork(path.join(__dirname, 'src', 'reels.js'), [], {
+            stdio: ['inherit', 'inherit', 'inherit', 'ipc']
+        });
+
+        reelsProcess.on('message', (msg) => {
+            if (msg.type === 'log') {
+                notifyRenderer('info', msg.message);
+            } else if (msg.type === 'new-video-content') {
+                mainWindow.webContents.send('new-video-content-updated', msg.content);
+            } else if (msg.type === 'reels-status') {
+                mainWindow.webContents.send('reels-status', msg.message);
+                if (msg.message === 'stopped') {
+                    if (reelsProcess) {
+                        reelsProcess.kill('SIGTERM');
+                        reelsProcess = null;
+                    }
+                }
+            } else if (msg.type === 'reels-post-success') {
+                mainWindow.webContents.send('reels-post-success-updated', msg.content);
+            }
+        });
+
+        reelsProcess.on('exit', (code, signal) => {
+            console.log(`Reels crawler process exited with code ${code} and signal ${signal}`);
+            notifyRenderer('stopped', `Tiến trình Video đã dừng (Code: ${code}, Signal: ${signal})`);
+            reelsProcess = null;
+        });
+
+        reelsProcess.send({ command: 'start-reels', config: configUpdate });
+        notifyRenderer('info', '🚀 Đang khởi động luồng video...');
+        mainWindow.webContents.send('reels-status', 'running');
+    } else {
+        console.log('Reels crawler process already running.');
+        notifyRenderer('info', '❗ Luồng Video đã chạy rồi.');
+    }
+});
+
+ipcMain.on('stop-reels-post', () => {
+    console.log('Nhận lệnh STOP REELS POST');
+    if (reelsProcess) {
+        reelsProcess.send({ command: 'stop-reels' });
+        notifyRenderer('info', '🛑 Đang gửi yêu cầu dừng luồng Video...');
+        mainWindow.webContents.send('reels-status', 'stopping');
+        
+        setTimeout(() => {
+            if (reelsProcess && !reelsProcess.killed) {
+                console.warn('⚠️ Tiến trình Video không tự dừng, buộc phải kill.');
+                reelsProcess.kill('SIGKILL');
+                reelsProcess = null;
+                notifyRenderer('stopped', '🛑 Buộc dừng luồng Video.');
+                mainWindow.webContents.send('reels-status', 'stopped');
+            }
+        }, 10000);
+    } else {
+        console.log('No reels process to stop.');
+        notifyRenderer('info', '❗ Không có luồng Video nào để dừng.');
     }
 });
 

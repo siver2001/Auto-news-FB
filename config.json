@@ -1,20 +1,20 @@
 {
   "API_KEY": "AIzaSyAQmOBJh7F99RRmw0hQE8730iOmAasfHD0",
-  "MODEL": "google/gemma-3-12b",
-  "AI_SOURCE": "local",
+  "MODEL": "gemini-2.0-flash",
+  "AI_SOURCE": "cloud",
   "LOCAL_AI_URL": "http://localhost:1234/v1",
   "CLOUD_API_URL": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
   "FB_PAGE_ID": "586541414551416",
   "FB_PAGE_TOKEN": "EAAcLVV7l3e8BPLa3P5HUDXqXegzmGZA40GZADQNplxI4ZCvFK3eBsAYeyll4ZBBeSpZBm47OmOXyZCvEVGECB42ZBZCJtWYXy1bXCEBDPFGQHozr0L1uWl4aJigI4eP6BXKKjObhOOLn5SrBLpZBoZBp3g7cZCw8sCW1bqQssLdWC95uxDYQzytkgTDPkFYUHSD6QZCDZCciI",
   "FB_GRAPH_API_VERSION": "v23.0",
   "DEBUG_MODE": false,
-  "AUTO_LIKE_POSTS": true,
-  "AUTO_REACT_COMMENTS": true,
+  "AUTO_LIKE_POSTS": false,
+  "AUTO_REACT_COMMENTS": false,
   "AUTO_REACT_COMMENT_DELAY_SECONDS": 60,
   "COMMENT_REACTION_TYPE": "LOVE",
   "SHARE_POST_TO_STORY": true,
   "LOGO_PATH": "C:\\Users\\long.nh\\Desktop\\TRENDY.jpg",
-  "REWRITE_MODE": "ai",
+  "REWRITE_MODE": "manual",
   "POST_INTERVAL_MINUTES": 15,
   "CRAWL_LOOP_DELAY_MINUTES": 15,
   "sources": [
@@ -25,5 +25,9 @@
     "https://baochinhphu.vn"
   ],
   "USED": 437,
-  "sources[]": "https://baochinhphu.vn"
+  "sources[]": "https://baochinhphu.vn",
+  "videoSources": ["https://www.youtube.com/@TheDodo"],
+  "DEBUG_MODE_REELS": false,
+  "VIDEO_POST_INTERVAL_MINUTES": 15,
+  "VIDEO_CRAWL_LOOP_DELAY_MINUTES": 30
 }

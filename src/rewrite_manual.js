@@ -78,7 +78,7 @@ export async function rewriteManual({ title, originalContent }) {
         },
         'tích cực': {
             tags: ['🎉 TIN VUI', '✨ ĐÁNG MỪNG', '💖 ẤM LÒNG'],
-            emojis: ['🎉', '✨', '�', '🥰'],
+            emojis: ['🎉', '✨', '⭐', '🥰'],
         },
         'bất ngờ': {
             tags: ['🤯 KHÔNG THỂ TIN NỔI', '😲 BẤT NGỜ', '💡 BÍ MẬT ĐÃ HÉ LỘ'],
@@ -248,7 +248,6 @@ export async function rewriteManual({ title, originalContent }) {
         finalSummary,
         finalBody.trim(),
         finalQuestion,
-        '📌 Link bài viết gốc ở phần bình luận nhé!'
     ].filter(Boolean).join('\n\n');
     
     return result;

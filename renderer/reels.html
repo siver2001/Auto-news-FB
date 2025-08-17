@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tự động đăng Reels & Video</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <div class="wrapper">
+    <div class="form-container">
+      <h2>⚙️ Cấu hình đăng Video</h2>
+      <button onclick="window.location.href='index.html'" class="back-btn">
+        ⬅️ Quay lại trang Tin tức
+      </button>
+      <form id="reelsConfigForm">
+        <h3>📹 Nguồn video</h3>
+        <label>Các nguồn video (tối đa 5):</label>
+        <div class="source-list" id="videoSourceList"></div>
+        <button type="button" class="add-source">+ Thêm nguồn</button>
+
+        <h3>⏰ Cấu hình Thời gian</h3>
+        <label for="videoPostIntervalInput">Giãn cách giữa các bài đăng (phút, mặc định 15):</label>
+        <input type="number" name="VIDEO_POST_INTERVAL_MINUTES" id="videoPostIntervalInput" value="15" min="1" />
+
+        <label for="videoCrawlLoopDelayInput">Thời gian chờ giữa các chu kỳ cào video (phút, mặc định 30):</label>
+        <input type="number" name="VIDEO_CRAWL_LOOP_DELAY_MINUTES" id="videoCrawlLoopDelayInput" value="30" min="1" />
+        
+        <div class="checkbox-label">
+            <input type="checkbox" name="DEBUG_MODE_REELS" id="debugCheckReels" />
+            <label for="debugCheckReels" style="font-weight:normal; margin-top:0;">Chạy ở chế độ DEBUG (không đăng thật)</label>
+        </div>
+        <button type="submit">📂 Lưu cấu hình</button>
+      </form>
+      <div class="button-group">
+        <button type="button" id="btnStartReels">🚀 Bắt đầu</button>
+        <button type="button" id="btnStopReels">🛑 Dừng</button>
+      </div>
+      <p id="reelsStatus"></p>
+    </div>
+    <div class="preview-container">
+      <h3>🎬 Video đang chờ</h3>
+      <div id="videoQueue" class="rewritten-box"></div>
+    </div>
+    <div class="posted-container">
+      <h3>✅ Video đã đăng</h3>
+      <div id="reelsPosted" class="rewritten-box"></div>
+    </div>
+  </div>
+  <script src="./scripts/reelsRenderer.js"></script>
+</body>
+</html>

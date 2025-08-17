@@ -17,9 +17,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Kênh mới để nhận nội dung được viết lại theo thời gian thực
   onNewContent: (callback) => ipcRenderer.on('new-content-updated', (_e, content) => callback(content)),
 
-  // KÊNH MỚI: Thêm kênh này để nhận trạng thái cào bài
+  // Thêm kênh này để nhận trạng thái cào bài
   onCrawlStatus: (callback) => ipcRenderer.on('crawl-status', (_e, status) => callback(status)),
 
   onPostSuccess: (callback) => ipcRenderer.on('post-success-updated', (_e, data) => callback(data)),
-  removePost: (link) => ipcRenderer.send('remove-post', { link })
+  removePost: (link) => ipcRenderer.send('remove-post', { link }),
+
+   // Kênh liên lạc cho luồng video
+  startReelsPost: (config) => ipcRenderer.send('start-reels-post', config),
+  stopReelsPost: () => ipcRenderer.send('stop-reels-post'),
+  onReelsStatus: (callback) => ipcRenderer.on('reels-status', (_e, status) => callback(status)),
+  onNewVideoContent: (callback) => ipcRenderer.on('new-video-content-updated', (_e, content) => callback(content)),
+  onReelsPostSuccess: (callback) => ipcRenderer.on('reels-post-success-updated', (_e, data) => callback(data)),
 });
