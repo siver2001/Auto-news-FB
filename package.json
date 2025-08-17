@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "electron": "latest",
+    "electron-rebuild": "^3.2.9",
     "nodemon": "^3.1.10"
   }
 }

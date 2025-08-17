@@ -134,8 +134,28 @@ async function reactToFacebook(objectId, reactionType = 'LIKE', config) {
     return null;
   }
 }
+
 /**
- * Đăng Story với một hình ảnh và một liên kết đến bài viết.
+ * HÀM MỚI: Tải ảnh lên và lấy media container ID.
+ */
+async function uploadStoryMedia(imageUrl, config) {
+    const { FB_PAGE_ID, FB_PAGE_TOKEN, FB_GRAPH_API_VERSION } = config;
+    const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/photos`;
+    try {
+        const response = await axios.post(url, {
+            url: imageUrl,
+            published: false,
+            access_token: FB_PAGE_TOKEN
+        });
+        return response.data.id;
+    } catch (error) {
+        console.error('❌ Lỗi khi upload ảnh cho Story:', error.response?.data?.error?.message || error.message);
+        throw new Error('Không thể tải ảnh lên để tạo Story.');
+    }
+}
+
+/**
+ * HÀM ĐƯỢC CẬP NHẬT: Đăng Story với một hình ảnh và một liên kết.
  * @param {string} imageUrl - URL của ảnh cho Story.
  * @param {string} postUrl - URL của bài viết trên fanpage.
  * @param {object} config - Đối tượng cấu hình.
@@ -143,17 +163,30 @@ async function reactToFacebook(objectId, reactionType = 'LIKE', config) {
  */
 async function postStoryWithLink(imageUrl, postUrl, config) {
   const { FB_PAGE_ID, FB_PAGE_TOKEN, FB_GRAPH_API_VERSION } = config;
-  // Sử dụng endpoint Story chuyên dụng, không phải endpoint /photos
-  const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/stories`;
-
-  const form = new FormData();
-  form.append('access_token', FB_PAGE_TOKEN);
-  form.append('file_url', imageUrl); // Tham số mới để chỉ định URL ảnh cho Story
-  form.append('link_url', postUrl); // Tham số mới để tạo link sticker cho Story
+  
+  if (!imageUrl || !postUrl) {
+    throw new Error("Story cần cả URL ảnh và URL liên kết.");
+  }
 
   try {
-    const response = await axios.post(url, form, { headers: form.getHeaders() });
+    // Bước 1: Tải ảnh lên và lấy media container ID
+    const mediaId = await uploadStoryMedia(imageUrl, config);
+    if (!mediaId) {
+        throw new Error("Không thể lấy media ID để đăng Story.");
+    }
+    
+    // Bước 2: Tạo và xuất bản Story
+    const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${FB_PAGE_ID}/stories`;
+    const response = await axios.post(url, {
+        attachment_media: {
+            media_fbid: mediaId
+        },
+        link_url: postUrl,
+        access_token: FB_PAGE_TOKEN
+    });
+
     return response.data;
+
   } catch (error) {
     console.error('❌ Lỗi khi đăng Story với liên kết:', error.response?.data?.error?.message || error.message);
     throw new Error('Không thể đăng Story lên Facebook.');

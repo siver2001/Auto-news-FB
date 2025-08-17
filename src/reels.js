@@ -1,4 +1,3 @@
-// File: src/reels.js
 import { loadConfig, saveConfig } from './configLoader.js';
 import { postToFacebook } from './poster.js';
 import { loadLogEntries, isLinkPosted, isTitleSimilarToLog, saveLogEntry } from './logger.js';

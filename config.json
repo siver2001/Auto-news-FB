@@ -26,8 +26,11 @@
   ],
   "USED": 437,
   "sources[]": "https://baochinhphu.vn",
-  "videoSources": ["https://www.youtube.com/@TheDodo"],
+  "videoSources": [
+    "https://www.youtube.com/@TheDodo"
+  ],
   "DEBUG_MODE_REELS": false,
-  "VIDEO_POST_INTERVAL_MINUTES": 15,
-  "VIDEO_CRAWL_LOOP_DELAY_MINUTES": 30
+  "VIDEO_POST_INTERVAL_MINUTES": 1,
+  "VIDEO_CRAWL_LOOP_DELAY_MINUTES": 1,
+  "videoSources[]": "https://www.youtube.com/@TheDodo"
 }

@@ -4,7 +4,143 @@
   <meta charset="UTF-8" />
   <title>Tự động đăng Reels & Video</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./styles/main.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; font-family: "Roboto", sans-serif; background: #f4f6f9; height: 100vh; overflow: hidden; }
+    .wrapper { display: flex; justify-content: center; align-items: stretch; gap: 20px; padding: 20px; height: 100vh; }
+    .form-container, .preview-container, .posted-container { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.08); display: flex; flex-direction: column; width: 48%; min-width: 280px; overflow: auto; }
+    .form-container h2 { color: #2b4c9c; margin: 0 0 15px; }
+    label { font-weight: bold; display: block; margin-top: 12px; }
+    input[type="text"], input[type="password"], input[type="url"], select, input[type="number"] { width: 100%; padding: 0 10px; font-size: 15px; border-radius: 6px; border: 1px solid #ccc; height: 38px; box-sizing: border-box; }
+    .source-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .source-item { display: flex; gap: 10px; align-items: center; }
+    .source-item input { flex: 1; }
+    .remove-source, .add-source { color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .remove-source { background: #e74c3c; }
+    .add-source { background: #27ae60; margin-top: 10px; }
+    button { padding: 10px 14px; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; transition: background-color 0.2s; }
+    button:hover:not(:disabled) { opacity: 0.9; }
+    button:disabled { cursor: not-allowed; background-color: #bdc3c7 !important; }
+    button[type="submit"] { margin-top: 18px; background-color: #2b4c9c; }
+    #status { margin-top: 15px; font-size: 14px; white-space: pre-line; min-height: 20px; }
+    .preview-container h3, .posted-container h3 { margin: 0 0 15px; color: #2b4c9c;}
+    .rewritten-box {
+      flex: 1;
+      width: 100%;
+      padding: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: #f8f9fa;
+      overflow-y: auto;
+    }
+     .log-entry {
+        background-color: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .log-entry img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 6px;
+        margin-bottom: 10px;
+    }
+    .log-entry-content {
+        white-space: pre-wrap;
+    }
+    #status {
+      margin-top: 15px;
+      font-size: 14px;
+      white-space: pre-line;
+      min-height: 40px;
+      font-weight: bold;
+      padding: 8px;
+      border-radius: 5px;
+      text-align: center;
+    }
+    #status.status-error {
+        background-color: #ffe0e0;
+        color: #d32f2f !important;
+        border: 1px solid #d32f2f;
+    }
+    #status.status-success {
+        background-color: #e6ffe6;
+        color: #388e3c !important;
+        border: 1px solid #388e3c;
+    }
+    #status.status-info {
+        background-color: #e0f7fa;
+        color: #0288d1 !important;
+        border: 1px solid #0288d1;
+    }
+    #browseLogoBtn {
+    background-color: #6c248d;
+    color: white;
+    padding: 0 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+    transition: background-color 0.2s, transform 0.1s;
+    height: 38px;
+    box-sizing: border-box;
+    }
+    #browseLogoBtn:hover:not(:disabled) {
+        background-color: #5a6268;
+        opacity: 1;
+    }
+    #browseLogoBtn:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+    .button-group { display: flex; gap: 10px; margin-top: 10px; }
+    #btnStartAuto { background-color: #27ae60; }
+    #btnStopAuto { background-color: #c0392b; }
+    .checkbox-label { display: flex; align-items: center; margin-top: 15px; }
+    #addTimeSlotBtn, #addSourceBtn {
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+    text-align: center;
+    transition: all 0.2s ease-in-out;
+    align-self: flex-start;
+    }
+    #addTimeSlotBtn:hover:not(:disabled), #addSourceBtn:hover:not(:disabled) {
+        background-color: #138496;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    #addTimeSlotBtn:active:not(:disabled), #addSourceBtn:active:not(:disabled) {
+        transform: translateY(0px) scale(0.98);
+        box-shadow: none;
+    }
+    .save-image-btn, .view-original-btn {
+    display: inline-block;
+    margin-top: 10px;
+    margin-right: 10px;
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    }
+    .save-image-btn {
+        background-color: #28a745;
+    }
+    .save-image-btn:hover, .view-original-btn:hover {
+        opacity: 0.85;
+    }
+  </style>
 </head>
 <body>
   <div class="wrapper">
